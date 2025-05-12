@@ -52,11 +52,18 @@ class ChatService {
       );
 
       if (response.statusCode == 200) {
-        return List<Map<String, dynamic>>.from(jsonDecode(response.body)['messages']);
+        final data = jsonDecode(response.body);
+        // Ensure the messages are properly parsed and handle potential nulls
+        return (data['messages'] as List?)?.map((item) => {
+          'id': item['id']?.toString() ?? 'no-id',
+          'text': item['text']?.toString() ?? 'No text',
+          'time': item['timestamp']?.toString() ?? DateTime.now().toString(),
+        }).toList();
       }
+      return null;
     } catch (e) {
       print('Error retrieving messages: $e');
+      return null;
     }
-    return null;
   }
 }

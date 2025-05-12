@@ -24,9 +24,23 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _loadMessages() async {
-    final messages = await _chatService.getChatMessages(widget.chatId, widget.password);
-    if (messages != null) {
-      setState(() => _messages = messages);
+    try {
+      final messages = await _chatService.getChatMessages(widget.chatId, widget.password);
+      if (messages != null) {
+        setState(() {
+          _messages = messages;
+        });
+      } else {
+        setState(() {
+          _messages = []; // Or handle empty case appropriately
+        });
+      }
+    } catch (e) {
+      // Handle any exceptions that might occur during API call
+      setState(() {
+        _messages = []; // Or show error message
+      });
+      print('Error loading messages: $e');
     }
   }
 

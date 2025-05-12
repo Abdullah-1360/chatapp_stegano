@@ -68,19 +68,18 @@ app.post('/create-chat', async (req, res) => {
   }
 
   try {
-    // Check if chat name already exists
     const existingChat = await ChatInfo.findOne({ chatName });
     if (existingChat) {
-      return res.status(409).json({ error: 'Chat name already exists' });
+      const isPasswordValid = await bcrypt.compare(password, existingChat.password);
+      if (!isPasswordValid) {
+        return res.status(401).json({ error: 'Incorrect password' });
+      }
+      return res.status(200).json({ chatId: existingChat.chatId });
     }
 
-    // Generate secure chat ID
     const chatId = crypto.randomBytes(16).toString('hex');
-
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create new chat
     const newChat = new ChatInfo({
       chatName,
       password: hashedPassword,

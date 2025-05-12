@@ -14,8 +14,9 @@ class _CreateChatScreenState extends State<CreateChatScreen> {
   final _chatNameController = TextEditingController();
   final _passwordController = TextEditingController();
   final ChatService _chatService = ChatService();
+  List<Map<String, dynamic>> _messages = [];
 
-  Future<void> _createChat(BuildContext context) async { // Add context parameter
+  Future<void> _createChat(BuildContext context) async {
     if (_chatNameController.text.isEmpty || _passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('All fields required')),
@@ -29,7 +30,7 @@ class _CreateChatScreenState extends State<CreateChatScreen> {
         _passwordController.text,
       );
 
-      if (response.statusCode == 201) {
+      if (response.statusCode == 201 || response.statusCode == 200) {
         final chatId = jsonDecode(response.body)['chatId'];
         Navigator.push(
           context,
@@ -39,6 +40,10 @@ class _CreateChatScreenState extends State<CreateChatScreen> {
               password: _passwordController.text,
             ),
           ),
+        );
+      } else if (response.statusCode == 401) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Incorrect password')),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
