@@ -44,6 +44,7 @@ db.on('error', console.error.bind(console, 'connection error:'));
 const StegoSchema = new mongoose.Schema({
   password: String,
   encodedText: String,
+  chatId: String, // New field
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -51,17 +52,21 @@ const StegoData = mongoose.model('StegoData', StegoSchema);
 
 // Routes with Input Validation
 app.post('/store', async (req, res) => {
-  const { password, encodedText } = req.body;
+  const { password, encodedText, chatId } = req.body; // Added chatId
 
-  if (!password || !encodedText) {
+  if (!password || !encodedText || !chatId) {
     return res.status(400).send('Missing required fields');
   }
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
-    const stegoData = new StegoData({ password: hashedPassword, encodedText });
+    const stegoData = new StegoData({
+      password: hashedPassword,
+      encodedText,
+      chatId // Include chatId
+    });
     await stegoData.save();
-    res.status(201).send({ id: stegoData._id });
+    res.status(201).send({ id: stegoData._id, chatId }); // Return chatId
   } catch (error) {
     console.error('Error storing data:', error);
     res.status(500).send('Internal server error');
@@ -69,26 +74,36 @@ app.post('/store', async (req, res) => {
 });
 
 app.post('/retrieve', async (req, res) => {
-  const { id, password } = req.body;
+  const { chatId, password } = req.body;
 
-  if (!id || !password) {
+  if (!chatId || !password) {
     return res.status(400).send('Missing required fields');
   }
 
   try {
-    const stegoData = await StegoData.findById(id);
-    if (!stegoData) {
-      return res.status(404).send('Data not found');
+    const stegoData = await StegoData.find({ chatId: chatId });
+    if (stegoData.length === 0) {
+      return res.status(404).send('Chat not found');
     }
 
-    const isMatch = await bcrypt.compare(password, stegoData.password);
+    // Verify password against at least one message
+    const isMatch = stegoData.some(item => bcrypt.compareSync(password, item.password));
     if (!isMatch) {
       return res.status(401).send('Incorrect password');
     }
 
-    res.status(200).send({ encodedText: stegoData.encodedText });
+    // Return all messages sorted by timestamp
+    const messages = stegoData
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .map(item => ({
+        id: item._id,
+        text: item.encodedText,
+        time: item.createdAt.toISOString()
+      }));
+
+    res.status(200).json({ messages });
   } catch (error) {
-    console.error('Error retrieving data:', error);
+    console.error('Error retrieving chat:', error);
     res.status(500).send('Internal server error');
   }
 });
