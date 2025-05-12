@@ -2,7 +2,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class ChatService {
-  final String baseUrl = 'https://chatapp-stegano.vercel.app';
+  final String baseUrl = 'http://your-backend-url:3000';
 
   Future<String?> sendMessage(String chatId, String password, String message) async {
     try {
