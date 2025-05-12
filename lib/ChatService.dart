@@ -24,7 +24,22 @@ class ChatService {
     }
     return null;
   }
-
+  Future<http.Response> createChat(String chatName, String password) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/create-chat'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'chatName': chatName,
+          'password': password,
+        }),
+      );
+      return response;
+    } catch (e) {
+      print('Error creating chat: $e');
+      throw e;
+    }
+  }
   Future<List<Map<String, dynamic>>?> getChatMessages(String chatId, String password) async {
     try {
       final response = await http.post(

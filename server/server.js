@@ -49,27 +49,78 @@ const StegoSchema = new mongoose.Schema({
 });
 
 const StegoData = mongoose.model('StegoData', StegoSchema);
+// Add this to your schema and model definitions
+const ChatInfoSchema = new mongoose.Schema({
+  chatName: { type: String, unique: true },
+  password: String,
+  chatId: { type: String, unique: true }
+});
 
+const ChatInfo = mongoose.model('ChatInfo', ChatInfoSchema);
 // Routes with Input Validation
-app.post('/store', async (req, res) => {
-  const { password, encodedText, chatId } = req.body; // Added chatId
+const crypto = require('crypto');
 
-  if (!password || !encodedText || !chatId) {
-    return res.status(400).send('Missing required fields');
+app.post('/create-chat', async (req, res) => {
+  const { chatName, password } = req.body;
+
+  if (!chatName || !password) {
+    return res.status(400).json({ error: 'Missing required fields' });
   }
 
   try {
+    // Check if chat name already exists
+    const existingChat = await ChatInfo.findOne({ chatName });
+    if (existingChat) {
+      return res.status(409).json({ error: 'Chat name already exists' });
+    }
+
+    // Generate secure chat ID
+    const chatId = crypto.randomBytes(16).toString('hex');
+
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
-    const stegoData = new StegoData({
+
+    // Create new chat
+    const newChat = new ChatInfo({
+      chatName,
       password: hashedPassword,
-      encodedText,
-      chatId // Include chatId
+      chatId
     });
-    await stegoData.save();
-    res.status(201).send({ id: stegoData._id, chatId }); // Return chatId
+
+    await newChat.save();
+    res.status(201).json({ chatId });
   } catch (error) {
-    console.error('Error storing data:', error);
-    res.status(500).send('Internal server error');
+    console.error('Chat creation error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+app.post('/store', async (req, res) => {
+  const { password, encodedText, chatId } = req.body;
+
+  if (!password || !encodedText || !chatId) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    const chat = await ChatInfo.findOne({ chatId });
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat not found' });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, chat.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: 'Incorrect password' });
+    }
+
+    const message = new StegoData({
+      encodedText,
+      chatId
+    });
+    await message.save();
+    res.status(201).json({ id: message._id });
+  } catch (error) {
+    console.error('Store error:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -77,34 +128,34 @@ app.post('/retrieve', async (req, res) => {
   const { chatId, password } = req.body;
 
   if (!chatId || !password) {
-    return res.status(400).send('Missing required fields');
+    return res.status(400).json({ error: 'Missing required fields' });
   }
 
   try {
-    const stegoData = await StegoData.find({ chatId: chatId });
-    if (stegoData.length === 0) {
-      return res.status(404).send('Chat not found');
+    const chat = await ChatInfo.findOne({ chatId });
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat not found' });
     }
 
-    // Verify password against at least one message
-    const isMatch = stegoData.some(item => bcrypt.compareSync(password, item.password));
-    if (!isMatch) {
-      return res.status(401).send('Incorrect password');
+    const isPasswordValid = await bcrypt.compare(password, chat.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: 'Incorrect password' });
     }
 
-    // Return all messages sorted by timestamp
-    const messages = stegoData
-      .sort((a, b) => a.createdAt - b.createdAt)
-      .map(item => ({
-        id: item._id,
-        text: item.encodedText,
-        time: item.createdAt.toISOString()
-      }));
+    const messages = await StegoData.find({ chatId })
+      .sort({ createdAt: 1 })
+      .select('encodedText createdAt');
 
-    res.status(200).json({ messages });
+    res.status(200).json({
+      messages: messages.map(msg => ({
+        id: msg._id,
+        text: msg.encodedText,
+        timestamp: msg.createdAt.toISOString()
+      }))
+    });
   } catch (error) {
-    console.error('Error retrieving chat:', error);
-    res.status(500).send('Internal server error');
+    console.error('Retrieve error:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
